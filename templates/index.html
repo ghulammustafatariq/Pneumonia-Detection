@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuralX | AI Radiologist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617; /* Slate 950 */
+            color: #e2e8f0;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 0% 100%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+            min-height: 100vh;
+        }
+
+        /* Neon Glow Utilities */
+        .neon-border {
+            box-shadow: 0 0 5px rgba(34, 211, 238, 0.2), inset 0 0 10px rgba(34, 211, 238, 0.1);
+            border: 1px solid rgba(34, 211, 238, 0.3);
+        }
+        .neon-text {
+            text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+        }
+        .neon-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+        }
+        .neon-button:hover {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Scanline Animation for Image */
+        .scan-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(34, 211, 238, 0.8);
+            box-shadow: 0 0 10px rgba(34, 211, 238, 1);
+            animation: scan 2s linear infinite;
+            z-index: 10;
+            display: none;
+        }
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* Spinner */
+        .loader {
+            border: 3px solid rgba(34, 211, 238, 0.1);
+            border-left-color: #22d3ee;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4 md:p-8">
+
+    <header class="w-full max-w-6xl flex justify-between items-center mb-10 border-b border-gray-800 pb-4">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-white font-[JetBrains Mono]">NEURAL<span class="text-cyan-400">X</span> <span class="text-gray-500 text-sm font-normal ml-2">v7.1 (Uncertainty-Aware)</span></h1>
+        </div>
+        <div class="text-xs text-gray-500 uppercase tracking-widest font-semibold">Diagnostic System Online</div>
+    </header>
+
+    <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <div class="lg:col-span-5 flex flex-col gap-6">
+            
+            <div class="bg-slate-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-6">
+                <h2 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">01 // Select Analysis Protocol</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="btn-binary" class="group relative overflow-hidden rounded-lg bg-slate-800 border border-gray-700 p-4 text-left transition hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50">
+                        <div class="absolute inset-0 bg-cyan-500/5 opacity-0 transition group-hover:opacity-100"></div>
+                        <div class="relative">
+                            <p class="text-cyan-400 font-bold">Binary Scan</p>
+                            <p class="text-xs text-gray-500 mt-1">Normal vs. Pneumonia</p>
+                            <p class="text-[10px] text-gray-600 mt-2 font-mono">FAST MODE</p>
+                        </div>
+                    </button>
+                    <button id="btn-multi" class="group relative overflow-hidden rounded-lg bg-slate-800 border border-gray-700 p-4 text-left transition hover:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
+                        <div class="absolute inset-0 bg-purple-500/5 opacity-0 transition group-hover:opacity-100"></div>
+                        <div class="relative">
+                            <p class="text-purple-400 font-bold">Full Spectrum</p>
+                            <p class="text-xs text-gray-500 mt-1">6-Class + Uncertainty</p>
+                            <p class="text-[10px] text-gray-600 mt-2 font-mono">20x PREDICTION (ROBUST)</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-6 flex-grow flex flex-col">
+                <h2 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">02 // Image Acquisition</h2>
+                
+                <div id="drop-zone" class="flex-grow border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center p-8 transition-colors hover:border-cyan-500/50 hover:bg-slate-800/50 cursor-pointer relative overflow-hidden">
+                    <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/png, image/jpeg, image/jpg">
+                    
+                    <div id="upload-placeholder" class="text-center">
+                        <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-500">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        </div>
+                        <p class="text-sm text-gray-300 font-medium">Click to Upload X-Ray</p>
+                        <p class="text-xs text-gray-600 mt-2">Supports JPG, PNG (Max 5MB)</p>
+                    </div>
+
+                    <div id="upload-preview-container" class="hidden w-full h-full relative flex items-center justify-center">
+                        <img id="preview-thumb" src="" class="max-h-64 object-contain rounded opacity-80" />
+                        <button id="clear-upload" class="absolute top-2 right-2 bg-black/80 text-white rounded-full p-1 hover:text-red-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="error-box" class="hidden mt-4 bg-red-900/20 border border-red-800/50 text-red-400 text-xs p-3 rounded font-mono"></div>
+
+                <button id="btn-analyze" class="mt-6 w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg font-bold text-white tracking-wide uppercase text-sm shadow-[0_0_20px_rgba(6,182,212,0.4)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all hover:scale-[1.02]">
+                    Initiate Analysis Sequence
+                </button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-7 bg-slate-900/80 backdrop-blur-xl border border-gray-800 rounded-xl p-1 relative overflow-hidden min-h-[500px]">
+            <div class="absolute top-0 right-0 p-4 flex gap-2">
+                <div class="w-2 h-2 rounded-full bg-gray-700" id="status-dot"></div>
+                <span class="text-[10px] text-gray-500 font-mono" id="status-text">STANDBY</span>
+            </div>
+
+            <div class="p-6 md:p-8 h-full flex flex-col">
+                
+                <div id="state-idle" class="flex-grow flex flex-col items-center justify-center text-center opacity-40">
+                    <svg class="w-24 h-24 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    <h3 class="text-2xl font-light text-gray-400">Awaiting Input Data</h3>
+                    <p class="text-sm text-gray-600 mt-2 max-w-sm">Select a model protocol and upload a Chest X-Ray image to begin the diagnostic process.</p>
+                </div>
+
+                <div id="state-loading" class="hidden flex-grow flex flex-col items-center justify-center">
+                    <div class="loader mb-6"></div>
+                    <p class="text-cyan-400 font-mono text-sm animate-pulse">RUNNING 20x PREDICTION CYCLES...</p>
+                    <p class="text-gray-600 text-xs mt-2">Calculating Mean Confidence & Uncertainty Variance</p>
+                </div>
+
+                <div id="state-result" class="hidden h-full flex flex-col">
+                    <div class="grid md:grid-cols-2 gap-8 h-full">
+                        
+                        <div class="flex flex-col">
+                            <h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">03 // Visual Analysis</h3>
+                            <div class="relative rounded-lg overflow-hidden border border-gray-700 bg-black aspect-square scan-container group">
+                                <img id="result-img-base" src="" class="absolute inset-0 w-full h-full object-contain z-0 transition-opacity duration-300">
+                                <img id="result-img-heatmap" src="" class="absolute inset-0 w-full h-full object-contain z-10 opacity-0 transition-opacity duration-300">
+                                <div class="scan-line"></div>
+                                
+                                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex bg-gray-900/90 rounded-full p-1 border border-gray-700">
+                                    <button id="view-original" class="px-3 py-1 text-[10px] font-bold rounded-full bg-gray-700 text-white">X-RAY</button>
+                                    <button id="view-heatmap" class="px-3 py-1 text-[10px] font-bold rounded-full text-gray-400 hover:text-white">AI FOCUS</button>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex justify-between items-center px-2">
+                                <span class="text-[10px] text-gray-500 font-mono" id="validation-msg">VALIDATION: PASS</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col justify-center">
+                            <h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">04 // Diagnostic Output</h3>
+                            
+                            <div class="mb-6">
+                                <h1 id="pred-class" class="text-4xl md:text-5xl font-black text-white tracking-tight mb-2">PNEUMONIA</h1>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="h-1.5 flex-grow bg-gray-800 rounded-full overflow-hidden">
+                                        <div id="pred-bar" class="h-full bg-cyan-400 w-0 transition-all duration-1000"></div>
+                                    </div>
+                                    <span id="pred-conf" class="text-xl font-mono text-cyan-400 font-bold">98.2%</span>
+                                </div>
+                                <div id="uncertainty-box" class="inline-flex items-center gap-2 px-3 py-1 rounded bg-slate-800 border border-slate-700">
+                                    <span class="text-[10px] text-gray-400 uppercase tracking-wide">Variance Index:</span>
+                                    <span id="pred-variance" class="text-xs font-mono text-purple-400">0.0001</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50 flex-grow max-h-[250px] relative">
+                                <canvas id="chart-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer class="mt-12 text-center text-gray-600 text-xs">
+        <p>NeuralX System | Powered by TensorFlow & Flask</p>
+        <p class="mt-1 opacity-50">Disclaimer: For educational & research purposes only. Not for clinical diagnosis.</p>
+    </footer>
+
+    <script>
+        // --- State Management ---
+        const state = {
+            selectedMode: null, // 'vgg16' or 'densenet'
+            file: null,
+            chartInstance: null
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            btnBinary: document.getElementById('btn-binary'),
+            btnMulti: document.getElementById('btn-multi'),
+            dropZone: document.getElementById('drop-zone'),
+            fileInput: document.getElementById('file-input'),
+            uploadPlaceholder: document.getElementById('upload-placeholder'),
+            uploadPreviewContainer: document.getElementById('upload-preview-container'),
+            previewThumb: document.getElementById('preview-thumb'),
+            clearUpload: document.getElementById('clear-upload'),
+            btnAnalyze: document.getElementById('btn-analyze'),
+            errorBox: document.getElementById('error-box'),
+            
+            // Panels
+            stateIdle: document.getElementById('state-idle'),
+            stateLoading: document.getElementById('state-loading'),
+            stateResult: document.getElementById('state-result'),
+            
+            // Result Elements
+            statusDot: document.getElementById('status-dot'),
+            statusText: document.getElementById('status-text'),
+            resultImgBase: document.getElementById('result-img-base'),
+            resultImgHeatmap: document.getElementById('result-img-heatmap'),
+            viewOriginal: document.getElementById('view-original'),
+            viewHeatmap: document.getElementById('view-heatmap'),
+            predClass: document.getElementById('pred-class'),
+            predConf: document.getElementById('pred-conf'),
+            predBar: document.getElementById('pred-bar'),
+            predVariance: document.getElementById('pred-variance'),
+            uncertaintyBox: document.getElementById('uncertainty-box'),
+            validationMsg: document.getElementById('validation-msg'),
+            chartCanvas: document.getElementById('chart-canvas')
+        };
+
+        // --- Initialization ---
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#334155';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        els.btnAnalyze.disabled = true;
+
+        // --- Event Listeners ---
+
+        // 1. Mode Selection
+        els.btnBinary.addEventListener('click', () => selectMode('vgg16', els.btnBinary));
+        els.btnMulti.addEventListener('click', () => selectMode('densenet', els.btnMulti));
+
+        function selectMode(mode, btn) {
+            state.selectedMode = mode;
+            
+            // Visual Toggle
+            [els.btnBinary, els.btnMulti].forEach(b => {
+                b.classList.remove('ring-2', 'ring-cyan-500', 'ring-purple-500', 'bg-slate-700');
+                b.classList.add('bg-slate-800');
+            });
+            
+            const ringColor = mode === 'vgg16' ? 'ring-cyan-500' : 'ring-purple-500';
+            btn.classList.remove('bg-slate-800');
+            btn.classList.add('bg-slate-700', 'ring-2', ringColor);
+            
+            checkReady();
+        }
+
+        // 2. File Upload
+        els.fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        
+        // Drag and Drop Visuals
+        els.dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.add('border-cyan-500', 'bg-slate-800');
+        });
+        els.dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('border-cyan-500', 'bg-slate-800');
+        });
+        els.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            els.dropZone.classList.remove('border-cyan-500', 'bg-slate-800');
+            if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file) return;
+            if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+                showError("Invalid file type. Please upload JPG or PNG.");
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                showError("File too large. Max 5MB.");
+                return;
+            }
+
+            state.file = file;
+            els.errorBox.classList.add('hidden');
+            
+            // Show Preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                els.previewThumb.src = e.target.result;
+                els.uploadPlaceholder.classList.add('hidden');
+                els.uploadPreviewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+
+            checkReady();
+        }
+
+        els.clearUpload.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.file = null;
+            els.fileInput.value = '';
+            els.uploadPreviewContainer.classList.add('hidden');
+            els.uploadPlaceholder.classList.remove('hidden');
+            els.btnAnalyze.disabled = true;
+        });
+
+        function checkReady() {
+            if (state.selectedMode && state.file) {
+                els.btnAnalyze.disabled = false;
+                els.btnAnalyze.classList.add('neon-button');
+                els.btnAnalyze.innerText = "INITIATE ANALYSIS SEQUENCE";
+            } else {
+                els.btnAnalyze.disabled = true;
+                els.btnAnalyze.classList.remove('neon-button');
+            }
+        }
+
+        function showError(msg) {
+            els.errorBox.textContent = `[SYSTEM ERROR]: ${msg}`;
+            els.errorBox.classList.remove('hidden');
+        }
+
+        // 3. Analysis Logic
+        els.btnAnalyze.addEventListener('click', async () => {
+            if (!state.selectedMode || !state.file) return;
+
+            // UI: Loading State
+            els.stateIdle.classList.add('hidden');
+            els.stateResult.classList.add('hidden');
+            els.stateLoading.classList.remove('hidden');
+            els.statusDot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse";
+            els.statusText.textContent = "COMPUTING...";
+            els.statusText.classList.add("text-yellow-500");
+            
+            // Prepare Request
+            const formData = new FormData();
+            formData.append('image', state.file);
+            const endpoint = state.selectedMode === 'vgg16' ? '/predict_binary' : '/predict_multiclass';
+
+            try {
+                const response = await fetch(endpoint, { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (!response.ok || data.error) throw new Error(data.error || "Analysis Failed");
+
+                renderResults(data);
+
+            } catch (err) {
+                console.error(err);
+                els.stateLoading.classList.add('hidden');
+                els.stateIdle.classList.remove('hidden');
+                els.statusDot.className = "w-2 h-2 rounded-full bg-red-500";
+                els.statusText.textContent = "ERROR";
+                els.statusText.classList.remove("text-yellow-500");
+                els.statusText.classList.add("text-red-500");
+                showError(err.message);
+            }
+        });
+
+        // 4. Render Results
+        function renderResults(data) {
+            els.stateLoading.classList.add('hidden');
+            els.stateResult.classList.remove('hidden');
+            
+            // Status update
+            els.statusDot.className = "w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+            els.statusText.textContent = "ANALYSIS COMPLETE";
+            els.statusText.className = "text-[10px] font-mono text-green-500";
+            
+            // Images
+            const reader = new FileReader();
+            reader.onload = (e) => { els.resultImgBase.src = e.target.result; };
+            reader.readAsDataURL(state.file);
+
+            if (data.gradcam_image) {
+                els.resultImgHeatmap.src = data.gradcam_image;
+                document.querySelector('.scan-line').style.display = 'block';
+            } else {
+                els.resultImgHeatmap.src = '';
+                document.querySelector('.scan-line').style.display = 'none';
+            }
+
+            // Parse Predictions
+            let predData = state.selectedMode === 'vgg16' ? data.binary_prediction : data.multiclass_prediction;
+            let varianceData = data.uncertainty || {}; // Get variance info if available
+
+            // Find Top Class
+            const items = Object.entries(predData).map(([k, v]) => [k, v]);
+            items.sort((a, b) => b[1] - a[1]);
+            
+            let topClass = items[0][0].replace(/_/g, " ").toUpperCase();
+            let topScore = items[0][1];
+
+            // Update Text UI
+            els.predClass.textContent = topClass;
+            els.predConf.textContent = topScore.toFixed(1) + "%";
+            els.predBar.style.width = topScore + "%";
+            els.validationMsg.textContent = `VALIDATION: ${data.validation}`;
+
+            // --- Update Uncertainty UI ---
+            if (state.selectedMode === 'densenet') { // Multiclass Mode
+                els.uncertaintyBox.classList.remove('hidden');
+                // Get variance for the top class
+                let topClassKey = items[0][0];
+                let varianceVal = varianceData[topClassKey] || 0;
+                
+                els.predVariance.textContent = varianceVal.toFixed(4);
+                
+                // Color code variance (High variance = Bad)
+                if (varianceVal > 0.5) { // Threshold for "High Uncertainty"
+                     els.predVariance.className = "text-xs font-mono text-red-400 font-bold";
+                } else {
+                     els.predVariance.className = "text-xs font-mono text-purple-400";
+                }
+            } else {
+                els.uncertaintyBox.classList.add('hidden');
+            }
+
+
+            // Color Coding
+            els.predClass.className = "text-4xl md:text-5xl font-black tracking-tight mb-2 neon-text";
+            if (topClass === 'NORMAL') {
+                els.predClass.classList.add("text-green-400");
+                els.predBar.className = "h-full bg-green-400 w-0 transition-all duration-1000 shadow-[0_0_10px_#4ade80]";
+                els.predConf.className = "text-xl font-mono text-green-400 font-bold";
+            } else {
+                els.predClass.classList.add("text-red-500");
+                els.predBar.className = "h-full bg-red-500 w-0 transition-all duration-1000 shadow-[0_0_10px_#ef4444]";
+                els.predConf.className = "text-xl font-mono text-red-500 font-bold";
+            }
+
+            // Render Chart
+            renderChart(items);
+        }
+
+        function renderChart(items) {
+            if (state.chartInstance) state.chartInstance.destroy();
+
+            const labels = items.map(x => x[0]);
+            const values = items.map(x => x[1]);
+            
+            // Dynamic colors based on value
+            const bgColors = values.map(v => v > 50 ? 'rgba(34, 211, 238, 0.8)' : 'rgba(148, 163, 184, 0.3)');
+
+            const ctx = els.chartCanvas.getContext('2d');
+            state.chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Confidence',
+                        data: values,
+                        backgroundColor: bgColors,
+                        borderRadius: 4,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { 
+                            max: 100, 
+                            grid: { color: '#1e293b' },
+                            ticks: { display: false }
+                        },
+                        y: { 
+                            grid: { display: false },
+                            ticks: { font: { size: 10, family: 'Inter' }, color: '#94a3b8' }
+                        }
+                    },
+                    animation: { duration: 1500, easing: 'easeOutQuart' }
+                }
+            });
+        }
+
+        // 5. Image Toggles
+        els.viewOriginal.addEventListener('click', () => {
+            els.resultImgHeatmap.style.opacity = '0';
+            els.viewOriginal.classList.replace('text-gray-400', 'text-white');
+            els.viewOriginal.classList.replace('bg-transparent', 'bg-gray-700');
+            els.viewHeatmap.classList.replace('text-white', 'text-gray-400');
+            els.viewHeatmap.classList.replace('bg-purple-600', 'bg-transparent');
+        });
+
+        els.viewHeatmap.addEventListener('click', () => {
+            els.resultImgHeatmap.style.opacity = '0.6'; // Overlay effect
+            els.viewHeatmap.classList.replace('text-gray-400', 'text-white');
+            els.viewHeatmap.classList.remove('bg-transparent');
+            els.viewHeatmap.classList.add('bg-purple-600');
+            els.viewOriginal.classList.replace('text-white', 'text-gray-400');
+            els.viewOriginal.classList.replace('bg-gray-700', 'bg-transparent');
+        });
+
+    </script>
+</body>
+</html>
